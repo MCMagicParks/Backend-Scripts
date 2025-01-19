@@ -74,8 +74,8 @@ echo "Wings has been installed but still needs to be configured."
 
 echo "----------------------------------------------------------"
 echo "Next steps:"
-echo "2. Log in to Pelican Panel."
-echo "3. Add a new node in the panel and copy the configuration command."
-echo "4. Paste and execute the configuration command on this server."
-echo "5. Reboot system to enable updated GRUP configuration.
+echo "1. Log in to Pelican Panel."
+echo "2. Add a new node in the panel and copy the configuration command."
+echo "3. Paste and execute the configuration command on this server."
+echo "4. Reboot system to enable updated GRUP configuration."
 echo "----------------------------------------------------------"
