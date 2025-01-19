@@ -14,6 +14,28 @@ sh get-docker.sh
 systemctl enable --now docker
 rm -f get-docker.sh
 
+# Enable swap in GRUB
+GRUB_CONFIG="/etc/default/grub"
+SWAP_OPTION="swapaccount=1"
+
+echo "Enabling swap for Docker by updating GRUB configuration..."
+
+# Check if the GRUB_CMDLINE_LINUX_DEFAULT line already contains swapaccount=1
+if grep -q "GRUB_CMDLINE_LINUX_DEFAULT" "$GRUB_CONFIG" | grep -q "$SWAP_OPTION"; then
+  echo "Swap option ($SWAP_OPTION) is already enabled in GRUB."
+else
+  echo "Updating GRUB configuration to include $SWAP_OPTION..."
+  
+  # Update GRUB_CMDLINE_LINUX_DEFAULT to include swapaccount=1
+  sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\1 $SWAP_OPTION\"/" "$GRUB_CONFIG"
+  
+  echo "GRUB configuration updated successfully."
+fi
+
+# Update GRUB
+echo "Updating GRUB..."
+update-grub
+
 # Install Wings
 echo "Installing Wings..."
 mkdir -p /etc/pelican /var/run/wings
@@ -52,8 +74,8 @@ echo "Wings has been installed but still needs to be configured."
 
 echo "----------------------------------------------------------"
 echo "Next steps:"
-echo "1. Log in to Pelican Panel."
-echo "2. Add a new node in the panel and copy the configuration command."
-echo "3. Paste and execute the configuration command on this server."
-echo "4. Start the wings service by running systemctl start wings.
+echo "2. Log in to Pelican Panel."
+echo "3. Add a new node in the panel and copy the configuration command."
+echo "4. Paste and execute the configuration command on this server."
+echo "5. Reboot system to enable updated GRUP configuration.
 echo "----------------------------------------------------------"
