@@ -8,15 +8,39 @@ fi
 
 # Variables
 CONFIG_FILE="/etc/laps-runner.json"
-LAPS4LINUX_VENV_DIR="/opt/laps4linux"
-LAPS4LINUX_BINARY="$LAPS4LINUX_VENV_DIR/bin/laps-runner"
+LAPS4LINUX_DIR="/opt/laps4linux"
+VENV_DIR="$LAPS4LINUX_DIR/venv"
+LAPS4LINUX_BINARY="$VENV_DIR/bin/laps-runner"
 GROUP_NAME="secLAPSAdmins"
 
 echo "Starting LAPS4LINUX Runner setup with Native LAPS and automatic SID retrieval..."
 
 # Install prerequisites
 echo "Installing required dependencies..."
-apt update && apt install -y python3-venv python3-pip python3-setuptools python3-gssapi python3-dnspython krb5-user libkrb5-dev ldap-utils
+apt update && apt install -y python3-venv python3-pip python3-setuptools python3-gssapi python3-dnspython krb5-user libkrb5-dev ldap-utils git
+
+# Clone the LAPS4LINUX repository
+echo "Cloning LAPS4LINUX repository..."
+if [ ! -d "$LAPS4LINUX_DIR" ]; then
+  git clone https://github.com/schorschii/LAPS4LINUX.git "$LAPS4LINUX_DIR"
+else
+  echo "LAPS4LINUX directory already exists. Skipping clone."
+fi
+
+# Set up the virtual environment
+echo "Setting up Python virtual environment..."
+cd "$LAPS4LINUX_DIR" || exit 1
+python3 -m venv "$VENV_DIR" --system-site-packages
+
+# Install LAPS4LINUX in the virtual environment
+echo "Installing LAPS4LINUX in the virtual environment..."
+"$VENV_DIR/bin/pip3" install .
+
+# Check if installation succeeded
+if [ ! -f "$LAPS4LINUX_BINARY" ]; then
+  echo "LAPS4LINUX installation failed."
+  exit 1
+fi
 
 # Retrieve the SID for the specified group
 echo "Retrieving the SID for group: $GROUP_NAME..."
@@ -29,23 +53,8 @@ fi
 
 echo "Retrieved SID for $GROUP_NAME: $GROUP_SID"
 
-# Create a Python virtual environment for LAPS4LINUX
-echo "Setting up Python virtual environment..."
-mkdir -p "$LAPS4LINUX_VENV_DIR"
-python3 -m venv "$LAPS4LINUX_VENV_DIR" --system-site-packages
-
-# Activate the virtual environment and install LAPS4LINUX
-echo "Installing LAPS4LINUX Runner..."
-"$LAPS4LINUX_VENV_DIR/bin/pip3" install laps4linux
-
-# Check if installation succeeded
-if [ ! -f "$LAPS4LINUX_BINARY" ]; then
-  echo "LAPS4LINUX installation failed."
-  exit 1
-fi
-
-echo "Creating LAPS4LINUX configuration file with encryption..."
 # Generate configuration file
+echo "Creating LAPS4LINUX configuration file with encryption..."
 cat <<EOF > "$CONFIG_FILE"
 {
   "server": [],
@@ -81,6 +90,7 @@ After=network.target
 
 [Service]
 Type=simple
+WorkingDirectory=$LAPS4LINUX_DIR
 ExecStart=$LAPS4LINUX_BINARY -f
 Restart=always
 User=root
