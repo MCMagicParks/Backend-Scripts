@@ -17,14 +17,17 @@ echo "Starting LAPS4LINUX Runner setup with Native LAPS and automatic SID retrie
 
 # Install prerequisites
 echo "Installing required dependencies..."
-apt update && apt install -y python3-venv python3-pip python3-setuptools python3-gssapi python3-dnspython krb5-user libkrb5-dev ldap-utils git
+apt update && apt install -y python3-venv python3-pip python3-setuptools python3-gssapi python3-dnspython krb5-user libkrb5-dev ldap-utils git unzip
 
-# Clone the LAPS4LINUX repository
-echo "Cloning LAPS4LINUX repository..."
+# Download the LAPS4LINUX release
+echo "Downloading LAPS4LINUX release..."
 if [ ! -d "$LAPS4LINUX_DIR" ]; then
-  git clone https://github.com/schorschii/LAPS4LINUX.git "$LAPS4LINUX_DIR"
+  mkdir -p "$LAPS4LINUX_DIR"
+  curl -sL "https://github.com/schorschii/LAPS4LINUX/archive/refs/heads/main.zip" -o /tmp/laps4linux.zip
+  unzip -qo /tmp/laps4linux.zip -d /tmp
+  mv /tmp/LAPS4LINUX-main/* "$LAPS4LINUX_DIR"
 else
-  echo "LAPS4LINUX directory already exists. Skipping clone."
+  echo "LAPS4LINUX directory already exists. Skipping download."
 fi
 
 # Set up the virtual environment
@@ -34,7 +37,7 @@ python3 -m venv "$VENV_DIR" --system-site-packages
 
 # Install LAPS4LINUX in the virtual environment
 echo "Installing LAPS4LINUX in the virtual environment..."
-"$VENV_DIR/bin/pip3" install .
+"$VENV_DIR/bin/pip3" install "$LAPS4LINUX_DIR"
 
 # Check if installation succeeded
 if [ ! -f "$LAPS4LINUX_BINARY" ]; then
