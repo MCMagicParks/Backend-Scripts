@@ -6,65 +6,83 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-echo "Installing prerequisites for LAPS4LINUX..."
-# Update system and install prerequisites
-apt update && apt install -y wget curl unzip sssd adcli jq
-
 # Variables
-LAPS4LINUX_URL="https://github.com/LAPS4Linux/laps4linux/releases/latest/download/laps4linux"
-CONFIG_FILE="/etc/laps/laps.conf"
-LAPS4LINUX_INSTALL_DIR="/usr/local/bin"
-LAPS_SERVICE_FILE="/etc/systemd/system/laps4linux.service"
+CONFIG_FILE="/etc/laps-runner.json"
+LAPS4LINUX_VENV_DIR="/opt/laps4linux"
+LAPS4LINUX_BINARY="$LAPS4LINUX_VENV_DIR/bin/laps-runner"
+GROUP_NAME="secLAPSAdmins"
 
-# Create LAPS directory
-mkdir -p /etc/laps
-chmod 700 /etc/laps
+echo "Starting LAPS4LINUX Runner setup with Native LAPS and automatic SID retrieval..."
 
-echo "Downloading and installing LAPS4LINUX runner..."
-# Download the LAPS4LINUX runner binary
-wget -qO "${LAPS4LINUX_INSTALL_DIR}/laps4linux" "$LAPS4LINUX_URL"
-if [ $? -ne 0 ]; then
-  echo "Failed to download LAPS4LINUX binary. Exiting."
+# Install prerequisites
+echo "Installing required dependencies..."
+apt update && apt install -y python3-venv python3-pip python3-setuptools python3-gssapi python3-dnspython krb5-user libkrb5-dev ldap-utils
+
+# Retrieve the SID for the specified group
+echo "Retrieving the SID for group: $GROUP_NAME..."
+GROUP_SID=$(ldapsearch -LLL -Q -Y GSSAPI -b "dc=$(hostname -d | sed 's/\./,dc=/g')" "(cn=$GROUP_NAME)" objectSid | awk '/objectSid:/ {print $2}')
+
+if [ -z "$GROUP_SID" ]; then
+  echo "Failed to retrieve the SID for group: $GROUP_NAME. Ensure the group exists in Active Directory and that this machine is joined to the domain."
   exit 1
 fi
 
-# Set permissions for the binary
-chmod 755 "${LAPS4LINUX_INSTALL_DIR}/laps4linux"
+echo "Retrieved SID for $GROUP_NAME: $GROUP_SID"
 
-echo "Creating LAPS4LINUX configuration file..."
-# Prompt for domain-related details
-read -p "Enter your AD domain name (e.g., ad.example.com): " AD_DOMAIN
-read -p "Enter the local admin account to manage (e.g., admin): " ADMIN_ACCOUNT
-read -p "Enter the OU where computer accounts are stored (e.g., OU=Computers,DC=ad,DC=example,DC=com): " AD_OU
+# Create a Python virtual environment for LAPS4LINUX
+echo "Setting up Python virtual environment..."
+mkdir -p "$LAPS4LINUX_VENV_DIR"
+python3 -m venv "$LAPS4LINUX_VENV_DIR" --system-site-packages
 
-# Generate LAPS4LINUX configuration file
-cat <<EOF >"$CONFIG_FILE"
+# Activate the virtual environment and install LAPS4LINUX
+echo "Installing LAPS4LINUX Runner..."
+"$LAPS4LINUX_VENV_DIR/bin/pip3" install laps4linux
+
+# Check if installation succeeded
+if [ ! -f "$LAPS4LINUX_BINARY" ]; then
+  echo "LAPS4LINUX installation failed."
+  exit 1
+fi
+
+echo "Creating LAPS4LINUX configuration file with encryption..."
+# Generate configuration file
+cat <<EOF > "$CONFIG_FILE"
 {
-  "domain": "$AD_DOMAIN",
-  "admin_account": "$ADMIN_ACCOUNT",
-  "ou": "$AD_OU",
-  "password_length": 16,
-  "password_complexity": "high",
-  "password_validity_days": 30,
-  "update_interval_seconds": 86400,
-  "kerberos_tgt_renewal": true
+  "server": [],
+  "domain": "ad.enchantedexperiences.net",
+  "ldap-query": "(&(objectClass=computer)(cn=%1))",
+  "use-starttls": false,
+  "client-keytab-file": "/etc/krb5.keytab",
+  "cred-cache-file": "/tmp/laps.temp",
+  "native-laps": true,
+  "security-descriptor": "$GROUP_SID",
+  "history-size": 10,
+  "ldap-attribute-password": "msLAPS-EncryptedPassword",
+  "ldap-attribute-password-history": "msLAPS-EncryptedPasswordHistory",
+  "ldap-attribute-password-expiry": "msLAPS-PasswordExpirationTime",
+  "hostname": null,
+  "password-change-user": "root",
+  "password-days-valid": 30,
+  "password-length": 16,
+  "password-alphabet": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()",
+  "pam-grace-period": 0
 }
 EOF
 
 # Secure the configuration file
 chmod 600 "$CONFIG_FILE"
 
-echo "Configuring LAPS4LINUX as a systemd service..."
-# Create a systemd service file for LAPS4LINUX
-cat <<EOF >"$LAPS_SERVICE_FILE"
+# Create systemd service
+echo "Creating systemd service for LAPS4LINUX Runner..."
+cat <<EOF > /etc/systemd/system/laps4linux.service
 [Unit]
 Description=LAPS4LINUX Password Management Service
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=${LAPS4LINUX_INSTALL_DIR}/laps4linux --config $CONFIG_FILE
-Restart=on-failure
+ExecStart=$LAPS4LINUX_BINARY -f
+Restart=always
 User=root
 Group=root
 
@@ -72,10 +90,32 @@ Group=root
 WantedBy=multi-user.target
 EOF
 
-# Reload systemd daemon and enable service
+# Reload systemd and enable service
 systemctl daemon-reload
 systemctl enable laps4linux
 systemctl start laps4linux
 
-echo "LAPS4LINUX installation and configuration completed successfully!"
-echo "The service is now running and configured to manage the '$ADMIN_ACCOUNT' account."
+# Optionally add LAPS to PAM
+echo "Configuring PAM for automatic password rotation..."
+cat <<EOF > /usr/share/pam-configs/laps
+Name: LAPS4LINUX configuration
+Default: yes
+Priority: 0
+
+Session-Type: Additional
+Session-Interactive-Only: yes
+Session:
+        optional pam_exec.so type=close_session seteuid quiet $LAPS4LINUX_BINARY --pam
+EOF
+
+pam-auth-update
+
+echo "Setup completed successfully!"
+echo "-----------------------------------------------------"
+echo "Next Steps:"
+echo "1. Verify the configuration file at $CONFIG_FILE."
+echo "2. Test the setup with the following command:"
+echo "   $LAPS4LINUX_BINARY -f"
+echo "3. Check the logs using:"
+echo "   journalctl -u laps4linux -f"
+echo "-----------------------------------------------------"
