@@ -20,7 +20,7 @@ echo "Starting LAPS4LINUX Runner setup with Native LAPS and encryption..."
 
 # Install prerequisites
 echo "Installing required dependencies..."
-apt update && apt install -y python3-venv python3-pip python3-setuptools python3-gssapi python3-dnspython krb5-user libkrb5-dev ldap-utils git
+apt update && apt install -y python3-venv python3-pip python3-setuptools python3-gssapi python3-dnspython krb5-user libkrb5-dev ldap-utils adcli git
 
 # Clone the LAPS4LINUX repository and extract only the /runner directory
 echo "Cloning the LAPS4LINUX repository..."
@@ -52,12 +52,12 @@ if [ ! -f "$LAPS4LINUX_BINARY" ]; then
   exit 1
 fi
 
-# Retrieve the SID for the specified group
+# Retrieve the SID for the specified group using adcli
 echo "Retrieving the SID for group: $GROUP_NAME..."
-GROUP_SID=$(ldapsearch -LLL -Q -Y GSSAPI -b "dc=$(echo "$DOMAIN" | sed 's/\./,dc=/g')" "(cn=$GROUP_NAME)" objectSid | awk '/objectSid:/ {print $2}')
+GROUP_SID=$(adcli info --name="$GROUP_NAME" | grep -i "SID:" | awk '{print $2}')
 
 if [ -z "$GROUP_SID" ]; then
-  echo "Failed to retrieve the SID for group: $GROUP_NAME. Ensure the group exists in Active Directory and that this machine is joined to the domain."
+  echo "Failed to retrieve the SID for group: $GROUP_NAME using adcli. Ensure the group exists in Active Directory and that this machine is joined to the domain."
   exit 1
 fi
 
