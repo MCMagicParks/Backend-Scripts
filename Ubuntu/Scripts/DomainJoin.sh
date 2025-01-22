@@ -1,9 +1,8 @@
 #!/bin/bash
 
-# Ask for input
-read -p "Enter the domain: " DOMAIN
-read -p "Enter the domain admin username: " ADMIN_USER
-read -p "Enter an additional group to add to sudo: " SUDO_GROUP
+# Variables
+DOMAIN = "AD.ENCHANTEDEXPERIENCES.NET"
+SUDO_GROUP = "secLinuxAdmins"
 
 # Install required packages
 echo "Installing required packages..."
@@ -38,17 +37,17 @@ sudo chmod 600 /etc/sssd/sssd.conf
 echo "Configuring Kerberos..."
 cat <<EOF | sudo tee /etc/krb5.conf
 [libdefaults]
-default_realm = $DOMAIN
+default_realm = ${DOMAIN^^}
 
 [realms]
-$DOMAIN = {
-    kdc = $(echo "$DOMAIN" | awk -F '.' '{print "ad1."$0"\nad2."$0"\nad3."$0}')
-    admin_server = ad3.$DOMAIN
+${DOMAIN^^} = {
+    kdc = ${DOMAIN,,}
+    admin_server = ${DOMAIN,,}
 }
 
 [domain_realm]
-.$DOMAIN = $DOMAIN
-$DOMAIN = $DOMAIN
+.${DOMAIN,,} = ${DOMAIN^^}
+${DOMAIN,,} = ${DOMAIN^^}
 EOF
 
 # Configure PAM for home directories
@@ -66,6 +65,7 @@ sudo pam-auth-update --package
 
 # Join the domain
 echo "Joining the domain..."
+read -p "Enter the domain admin username: " ADMIN_USER
 sudo adcli join -U "$ADMIN_USER" "$DOMAIN"
 
 # Enable and start SSSD
@@ -80,4 +80,14 @@ cat <<EOF | sudo tee /etc/sudoers.d/domainadmins
 %$SUDO_GROUP ALL=(ALL:ALL) ALL
 EOF
 
-echo "Domain join and configuration complete! Please reboot the system."
+echo "============================"
+echo "Domain join has completed sucessfully. Please restart the server to complete configuration."
+echo ""
+read -r -p "OK to Restart? (Y/N) " RESTART_RESPONSE
+if [[ "$RESTART_RESPONSE" =~ ^([yY][eE][sS]|[yY])$ ]]
+then
+    do_something
+else
+    do_something_else
+fi
+
