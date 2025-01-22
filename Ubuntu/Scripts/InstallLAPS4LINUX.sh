@@ -12,7 +12,7 @@ LAPS4LINUX_DIR="/opt/laps4linux"
 RUNNER_DIR="$LAPS4LINUX_DIR/laps-runner"
 VENV_DIR="$RUNNER_DIR/venv"
 LAPS4LINUX_BINARY="$VENV_DIR/bin/laps-runner"
-GROUP_NAME="secLAPSAdmins"
+GROUP_SID="S-1-5-21-3286359242-2993552358-4013004210-1168" # secLAPSAdmins group SID
 DOMAIN="ad.enchantedexperiences.net"
 PASSWORD_CHANGE_USER="exadmin"
 
@@ -51,17 +51,6 @@ if [ ! -f "$LAPS4LINUX_BINARY" ]; then
   echo "LAPS4LINUX installation failed."
   exit 1
 fi
-
-# Retrieve the SID for the specified group using adcli
-echo "Retrieving the SID for group: $GROUP_NAME..."
-GROUP_SID=$(adcli info --name="$GROUP_NAME" | grep -i "SID:" | awk '{print $2}')
-
-if [ -z "$GROUP_SID" ]; then
-  echo "Failed to retrieve the SID for group: $GROUP_NAME using adcli. Ensure the group exists in Active Directory and that this machine is joined to the domain."
-  exit 1
-fi
-
-echo "Retrieved SID for $GROUP_NAME: $GROUP_SID"
 
 # Generate configuration file
 echo "Creating LAPS4LINUX configuration file with encryption..."
