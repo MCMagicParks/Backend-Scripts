@@ -61,7 +61,7 @@ cat <<EOF > "$CONFIG_FILE"
   "ldap-attribute-password-history": "msLAPS-EncryptedPasswordHistory",
   "ldap-attribute-password-expiry": "msLAPS-PasswordExpirationTime",
   "hostname": null,
-  "password-change-user": "root",
+  "password-change-user": "exadmin",
   "password-days-valid": 30,
   "password-length": 16,
   "password-alphabet": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()",
