@@ -6,6 +6,8 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+CLOUDFLARE_EMAIL = "hdinternal@enchantedexperiences.net"
+
 echo "Updating system and installing Certbot..."
 # Install Certbot and the Cloudflare plugin
 apt update && apt install -y certbot python3-certbot-dns-cloudflare
@@ -15,9 +17,6 @@ read -r SUBDOMAIN
 
 echo "Please enter your Cloudflare API key:"
 read -s CLOUDFLARE_API_KEY
-
-echo "Please enter your Cloudflare email address:"
-read -r CLOUDFLARE_EMAIL
 
 # Create Cloudflare credentials file
 CLOUDFLARE_CREDS_FILE="/etc/letsencrypt/cloudflare.ini"
