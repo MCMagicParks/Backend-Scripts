@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Variables
-DOMAIN = "AD.ENCHANTEDEXPERIENCES.NET"
-SUDO_GROUP = "secLinuxAdmins"
+DOMAIN="AD.ENCHANTEDEXPERIENCES.NET"
+SUDO_GROUP="secLinuxAdmins"
 
 # Install required packages
 echo "Installing required packages..."
@@ -65,7 +65,7 @@ sudo pam-auth-update --package
 
 # Join the domain
 echo "Joining the domain..."
-read -p "Enter the domain admin username: " ADMIN_USER
+read -p "Enter your domain credentials: " ADMIN_USER
 sudo adcli join -U "$ADMIN_USER" "$DOMAIN"
 
 # Enable and start SSSD
