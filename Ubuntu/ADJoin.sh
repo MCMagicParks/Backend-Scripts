@@ -1,59 +1,83 @@
 #!/bin/bash
 
-# Ensure the script is run as root
-if [ "$EUID" -ne 0 ]; then
-  echo "Please run this script as root."
-  exit 1
-fi
+# Ask for input
+read -p "Enter the domain: " DOMAIN
+read -p "Enter the domain admin username: " ADMIN_USER
+read -p "Enter an additional group to add to sudo: " SUDO_GROUP
 
-# Variables
-DOMAIN="ad.enchantedexperiences.net"
-ADMIN_GROUP="secLinuxAdmins@AD.ENCHANTEDEXPERIENCES.NET"
+# Install required packages
+echo "Installing required packages..."
+sudo apt update
+sudo apt install -y krb5-user adcli sssd-ad libnss-sss libpam-sss
 
-echo "Updating system and installing prerequisites..."
-# Install prerequisites
-apt update && apt install -y sssd-ad sssd-tools realmd adcli samba-common-bin libnss-sss libpam-sss
+# Configure SSSD
+echo "Configuring SSSD..."
+cat <<EOF | sudo tee /etc/sssd/sssd.conf
+[sssd]
+config_file_version = 2
+services = nss, pam
+domains = $DOMAIN
 
-echo "Verifying domain discoverability..."
-# Verify the domain is discoverable via DNS
-realm -v discover $DOMAIN
-if [ $? -ne 0 ]; then
-  echo "Domain discovery failed. Ensure the domain is properly configured in DNS."
-  exit 1
-fi
+[pam]
+offline_credentials_expiration = 365
+offline_failed_login_attempts = 5
+offline_failed_login_delay = 10
 
-echo "Please provide your domain credentials for joining the domain."
-read -p "Domain Username: " DOMAIN_USERNAME
-read -s -p "Domain Password: " DOMAIN_PASSWORD
-echo ""
+[domain/$DOMAIN]
+id_provider = ad
+access_provider = simple
+ldap_id_mapping = true
+cache_credentials = true
+fallback_homedir = /home/%u
+default_shell = /bin/bash
+skel_dir = /etc/skel
+EOF
+sudo chmod 600 /etc/sssd/sssd.conf
 
+# Configure Kerberos
+echo "Configuring Kerberos..."
+cat <<EOF | sudo tee /etc/krb5.conf
+[libdefaults]
+default_realm = $DOMAIN
+
+[realms]
+$DOMAIN = {
+    kdc = $(echo "$DOMAIN" | awk -F '.' '{print "ad1."$0"\nad2."$0"\nad3."$0}')
+    admin_server = ad3.$DOMAIN
+}
+
+[domain_realm]
+.$DOMAIN = $DOMAIN
+$DOMAIN = $DOMAIN
+EOF
+
+# Configure PAM for home directories
+echo "Configuring PAM..."
+cat <<EOF | sudo tee /usr/share/pam-configs/my-ad
+Name: AD user home management
+Default: yes
+Priority: 127
+Session-Type: Additional
+Session-Interactive-Only: yes
+Session:
+    required pam_mkhomedir.so skel=/etc/skel umask=0077
+EOF
+sudo pam-auth-update --package
+
+# Join the domain
 echo "Joining the domain..."
-# Join the domain using provided credentials
-echo $DOMAIN_PASSWORD | realm join -U $DOMAIN_USERNAME --install=/ $DOMAIN
-if [ $? -ne 0 ]; then
-  echo "Failed to join the domain. Check your credentials and try again."
-  exit 1
-fi
+sudo adcli join -U "$ADMIN_USER" "$DOMAIN"
 
-echo "Enabling automatic home directory creation..."
-# Enable automatic home directory creation
-pam-auth-update --enable mkhomedir
+# Enable and start SSSD
+echo "Enabling and starting SSSD..."
+sudo systemctl enable sssd
+sudo systemctl start sssd
 
-echo "Installing Kerberos tools..."
-# Install Kerberos tickets tools after enabling pam-auth-update
-apt install -y krb5-user
+# Add Domain Admins and additional group to sudoers
+echo "Configuring sudoers..."
+cat <<EOF | sudo tee /etc/sudoers.d/domainadmins
+%Domain\ Admins ALL=(ALL:ALL) ALL
+%$SUDO_GROUP ALL=(ALL:ALL) ALL
+EOF
 
-echo "Configuring sudoers file for admin group..."
-# Add secLinuxAdmins group to sudoers
-VISUDO_FILE="/etc/sudoers.d/secLinuxAdmins"
-if [ ! -f "$VISUDO_FILE" ]; then
-  echo "%$ADMIN_GROUP ALL=(ALL:ALL) ALL" > $VISUDO_FILE
-  chmod 0440 $VISUDO_FILE
-  echo "Sudoers file configured successfully."
-else
-  echo "Sudoers configuration already exists."
-fi
-
-echo "Rebooting the system..."
-# Reboot the system
-reboot
+echo "Domain join and configuration complete! Please reboot the system."
