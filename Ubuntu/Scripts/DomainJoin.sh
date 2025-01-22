@@ -90,8 +90,6 @@ echo ""
 read -r -p "OK to Restart? (Y/N) " RESTART_RESPONSE
 if [[ "$RESTART_RESPONSE" =~ ^([yY][eE][sS]|[yY])$ ]]
 then
-    do_something
-else
-    do_something_else
+    sudo reboot
 fi
 
