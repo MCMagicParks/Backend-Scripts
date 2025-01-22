@@ -7,7 +7,7 @@ SUDO_GROUP="secLinuxAdmins"
 # Install required packages
 echo "Installing required packages..."
 sudo apt update
-sudo apt install -y krb5-user adcli sssd-ad libnss-sss libpam-sss
+sudo apt install -y adcli sssd-ad libnss-sss libpam-sss
 
 # Configure SSSD
 echo "Configuring SSSD..."
@@ -62,6 +62,10 @@ Session:
     required pam_mkhomedir.so skel=/etc/skel umask=0077
 EOF
 sudo pam-auth-update --package
+
+# Install Kerberos
+echo "Installing Kerberos..."
+sudo apt install -y krb5-user 
 
 # Join the domain
 echo "Joining the domain..."
