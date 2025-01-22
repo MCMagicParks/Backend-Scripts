@@ -9,7 +9,7 @@ fi
 # Variables
 CONFIG_FILE="/etc/laps-runner.json"
 LAPS4LINUX_DIR="/opt/laps4linux"
-RUNNER_DIR="$LAPS4LINUX_DIR/runner"
+RUNNER_DIR="$LAPS4LINUX_DIR/laps-runner"
 VENV_DIR="$RUNNER_DIR/venv"
 LAPS4LINUX_BINARY="$VENV_DIR/bin/laps-runner"
 GROUP_NAME="secLAPSAdmins"
@@ -20,17 +20,21 @@ echo "Starting LAPS4LINUX Runner setup with Native LAPS and encryption..."
 
 # Install prerequisites
 echo "Installing required dependencies..."
-apt update && apt install -y python3-venv python3-pip python3-setuptools python3-gssapi python3-dnspython krb5-user libkrb5-dev ldap-utils git unzip
+apt update && apt install -y python3-venv python3-pip python3-setuptools python3-gssapi python3-dnspython krb5-user libkrb5-dev ldap-utils git
 
-# Download the LAPS4LINUX repository and extract only the /runner folder
-echo "Downloading and extracting the /runner folder from LAPS4LINUX repository..."
-if [ ! -d "$LAPS4LINUX_DIR" ]; then
+# Clone the LAPS4LINUX repository and extract only the /runner directory
+echo "Cloning the LAPS4LINUX repository..."
+if [ ! -d "$RUNNER_DIR" ]; then
   mkdir -p "$LAPS4LINUX_DIR"
-  curl -sL "https://github.com/schorschii/LAPS4LINUX/archive/refs/heads/main.zip" -o /tmp/laps4linux.zip
-  unzip -qo /tmp/laps4linux.zip "LAPS4LINUX-main/runner/*" -d /tmp
-  mv /tmp/LAPS4LINUX-main/runner "$LAPS4LINUX_DIR"
+  git clone --depth 1 https://github.com/schorschii/LAPS4LINUX.git "$LAPS4LINUX_DIR"
 else
-  echo "LAPS4LINUX directory already exists. Skipping download."
+  echo "LAPS4LINUX directory already exists. Skipping clone."
+fi
+
+# Ensure /runner exists
+if [ ! -d "$RUNNER_DIR" ]; then
+  echo "The /runner directory is missing in the repository. Please check the LAPS4LINUX repository structure."
+  exit 1
 fi
 
 # Set up the virtual environment inside the /runner directory
