@@ -10,6 +10,7 @@ fi
 DNS1="192.168.10.10"
 DNS2="192.168.11.10"
 NETPLAN_CONFIG="/etc/netplan/01-netcfg.yaml"
+RESOLV_CONF="/etc/resolv.conf"
 
 # Get the current network configuration
 echo "Fetching the current network configuration..."
@@ -45,6 +46,20 @@ EOF
 # Apply the new configuration
 echo "Applying the new Netplan configuration..."
 netplan apply
+
+# Ensure /etc/resolv.conf is symlinked to the appropriate systemd-resolved configuration
+if [ -L "$RESOLV_CONF" ]; then
+  echo "Ensuring /etc/resolv.conf links to systemd-resolved..."
+  ln -sf /run/systemd/resolve/stub-resolv.conf "$RESOLV_CONF"
+else
+  echo "Creating symlink for /etc/resolv.conf to systemd-resolved..."
+  rm -f "$RESOLV_CONF"
+  ln -s /run/systemd/resolve/stub-resolv.conf "$RESOLV_CONF"
+fi
+
+# Restart systemd-resolved to apply changes
+echo "Restarting systemd-resolved..."
+systemctl restart systemd-resolved
 
 # Verify the configuration
 echo "Verifying the updated configuration..."
