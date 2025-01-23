@@ -6,125 +6,124 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Variables
+# Constants
+DEB_PACKAGE="./Scripts/lib/laps4linux-runner.deb"
 CONFIG_FILE="/etc/laps-runner.json"
-LAPS4LINUX_DIR="/opt/laps4linux"
-RUNNER_DIR="$LAPS4LINUX_DIR/laps-runner"
-VENV_DIR="$RUNNER_DIR/venv"
-LAPS4LINUX_BINARY="$VENV_DIR/bin/laps-runner"
+CRON_FILE="/etc/cron.hourly/laps-runner"
+PAM_FILE="/etc/pam.d/common-session"
 GROUP_SID="S-1-5-21-3286359242-2993552358-4013004210-1168" # secLAPSAdmins group SID
+DC1="us-sac1dc-p01.ad.enchantedexperiences.net"
+DC2="us-rcd1dc-p01.ad.enchantedexperiences.net"
 DOMAIN="ad.enchantedexperiences.net"
 PASSWORD_CHANGE_USER="exadmin"
 
-echo "Starting LAPS4LINUX Runner setup with Native LAPS and encryption..."
+# Functions
+install_dependencies() {
+    echo "Installing required dependencies..."
+    apt update && apt install -y krb5-user python3-venv python3-pip python3-setuptools python3-gssapi python3-dnspython libkrb5-dev
+}
 
-# Install prerequisites
-echo "Installing required dependencies..."
-apt update && apt install -y python3-venv python3-pip python3-setuptools python3-gssapi python3-dnspython krb5-user libkrb5-dev ldap-utils adcli git
+install_package() {
+    echo "Installing LAPS4LINUX Runner package..."
+    if [[ -f "$DEB_PACKAGE" ]]; then
+        dpkg -i "$DEB_PACKAGE"
+        apt-get install -f -y  # Fix missing dependencies if any
+        echo "Package installed successfully."
+    else
+        echo "Error: DEB package not found at $DEB_PACKAGE"
+        exit 1
+    fi
+}
 
-# Clone the LAPS4LINUX repository and extract only the /runner directory
-echo "Cloning the LAPS4LINUX repository..."
-if [ ! -d "$RUNNER_DIR" ]; then
-  mkdir -p "$LAPS4LINUX_DIR"
-  git clone --depth 1 https://github.com/schorschii/LAPS4LINUX.git "$LAPS4LINUX_DIR"
-else
-  echo "LAPS4LINUX directory already exists. Skipping clone."
-fi
-
-# Ensure /runner exists
-if [ ! -d "$RUNNER_DIR" ]; then
-  echo "The /runner directory is missing in the repository. Please check the LAPS4LINUX repository structure."
-  exit 1
-fi
-
-# Set up the virtual environment inside the /runner directory
-echo "Setting up Python virtual environment in $RUNNER_DIR..."
-cd "$RUNNER_DIR" || exit 1
-python3 -m venv "$VENV_DIR" --system-site-packages
-
-# Install LAPS4LINUX in the virtual environment
-echo "Installing LAPS4LINUX in the virtual environment..."
-"$VENV_DIR/bin/pip3" install "$RUNNER_DIR"
-
-# Check if installation succeeded
-if [ ! -f "$LAPS4LINUX_BINARY" ]; then
-  echo "LAPS4LINUX installation failed."
-  exit 1
-fi
-
-# Generate configuration file
-echo "Creating LAPS4LINUX configuration file with encryption..."
-cat <<EOF > "$CONFIG_FILE"
+setup_config() {
+    echo "Setting up configuration file..."
+    cat <<EOF >"$CONFIG_FILE"
 {
-  "server": [],
-  "domain": "$DOMAIN",
-  "ldap-query": "(&(objectClass=computer)(cn=%1))",
-  "use-starttls": false,
-  "client-keytab-file": "/etc/krb5.keytab",
-  "cred-cache-file": "/tmp/laps.temp",
-  "native-laps": true,
-  "security-descriptor": "$GROUP_SID",
-  "history-size": 10,
-  "ldap-attribute-password": "msLAPS-EncryptedPassword",
-  "ldap-attribute-password-history": "msLAPS-EncryptedPasswordHistory",
-  "ldap-attribute-password-expiry": "msLAPS-PasswordExpirationTime",
-  "hostname": null,
-  "password-change-user": "$PASSWORD_CHANGE_USER",
-  "password-days-valid": 30,
-  "password-length": 16,
-  "password-alphabet": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()",
-  "pam-grace-period": 0
+    "server": [
+        {
+            "address": "$DC1",
+            "port": 389,
+            "ssl": false
+        },
+        {
+            "address": "$DC2",
+            "port": 389,
+            "ssl": false
+        }
+    ],
+    "use-starttls": true,
+    "domain": "$DOMAIN",
+    "ldap-query": "(&(objectClass=computer)(cn=%1))",
+    "cred-cache-file": "/tmp/laps.temp",
+    "client-keytab-file": "/etc/krb5.keytab",
+    "native-laps": true,
+    "security-descriptor": "$GROUP_SID",
+    "history-size": 10,
+    "ldap-attribute-password": "msLAPS-EncryptedPassword",
+    "ldap-attribute-password-history": "msLAPS-EncryptedPasswordHistory",
+    "ldap-attribute-password-expiry": "msLAPS-PasswordExpirationTime",
+    "hostname": null,
+    "password-change-user": "$PASSWORD_CHANGE_USER",
+    "password-days-valid": 30,
+    "password-length": 15,
+    "password-alphabet": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()",
+    "pam-services": ["login"],
+    "pam-grace-period": 300
 }
 EOF
+    if [[ -f "$CONFIG_FILE" ]]; then
+        echo "Configuration file overwritten at $CONFIG_FILE."
+    else
+        echo "Configuration file created at $CONFIG_FILE."
+    fi
+}
 
-# Secure the configuration file
-chmod 600 "$CONFIG_FILE"
+setup_cron() {
+    echo "Setting up cron job..."
+    if [[ ! -f "$CRON_FILE" ]]; then
+        cat <<EOF >"$CRON_FILE"
+#!/bin/sh
 
-# Create systemd service
-echo "Creating systemd service for LAPS4LINUX Runner..."
-cat <<EOF > /etc/systemd/system/laps4linux.service
-[Unit]
-Description=LAPS4LINUX Password Management Service
-After=network.target
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-[Service]
-Type=simple
-WorkingDirectory=$RUNNER_DIR
-ExecStart=$LAPS4LINUX_BINARY -f
-Restart=always
-User=root
-Group=root
+OUT=\$(/usr/sbin/laps-runner --config $CONFIG_FILE 2>&1)
 
-[Install]
-WantedBy=multi-user.target
+if [ -f /usr/bin/logger ]; then
+    echo \$OUT | /usr/bin/logger -t laps-runner
+fi
 EOF
+        chmod +x "$CRON_FILE"
+        echo "Cron job created at $CRON_FILE."
+    else
+        echo "Cron job already exists at $CRON_FILE. Skipping creation."
+    fi
+}
 
-# Reload systemd and enable service
-systemctl daemon-reload
-systemctl enable laps4linux
-systemctl start laps4linux
+setup_pam() {
+    echo "Setting up PAM configuration..."
+    if ! grep -q "laps-runner" "$PAM_FILE"; then
+        echo "Adding PAM configuration to $PAM_FILE..."
+        echo "session optional pam_exec.so type=close_session seteuid quiet /usr/sbin/laps-runner --pam" >>"$PAM_FILE"
+        echo "PAM configuration updated."
+    else
+        echo "PAM configuration already exists in $PAM_FILE. Skipping modification."
+    fi
+}
 
-# Optionally add LAPS to PAM
-echo "Configuring PAM for automatic password rotation..."
-cat <<EOF > /usr/share/pam-configs/laps
-Name: LAPS4LINUX configuration
-Default: yes
-Priority: 0
+final_steps() {
+    echo "Installation completed."
+    echo "Next steps:"
+    echo "1. Review the configuration file: $CONFIG_FILE"
+    echo "2. Verify the installation by running: /usr/sbin/laps-runner -f"
+    echo "3. Ensure the cron job is running correctly: $CRON_FILE"
+    echo "4. If applicable, test the PAM integration."
+}
 
-Session-Type: Additional
-Session-Interactive-Only: yes
-Session:
-        optional pam_exec.so type=close_session seteuid quiet $LAPS4LINUX_BINARY --pam
-EOF
-
-pam-auth-update
-
-echo "Setup completed successfully!"
-echo "-----------------------------------------------------"
-echo "Next Steps:"
-echo "1. Verify the configuration file at $CONFIG_FILE."
-echo "2. Test the setup with the following command:"
-echo "   $LAPS4LINUX_BINARY -f"
-echo "3. Check the logs using:"
-echo "   journalctl -u laps4linux -f"
-echo "-----------------------------------------------------"
+# Main Script Execution
+install_dependencies
+install_package
+setup_config
+setup_cron
+setup_pam
+final_steps
