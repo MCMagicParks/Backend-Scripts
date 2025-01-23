@@ -6,7 +6,7 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-CLOUDFLARE_EMAIL = "hdinternal@enchantedexperiences.net"
+CLOUDFLARE_EMAIL="hdinternal@enchantedexperiences.net"
 
 echo "Updating system and installing Certbot..."
 # Install Certbot and the Cloudflare plugin
