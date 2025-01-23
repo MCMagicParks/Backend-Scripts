@@ -57,15 +57,17 @@ run_ubuntu_updates() {
 # Main menu loop
 while true; do
     clear
-    echo "Enchanted Linux Sysprep Tool"
+    echo "Enchanted Experiences Linux Sysprep Tool"
+    echo "By chums122"
     echo "============================"
-    echo "1. Set Static DNS"
-    echo "3. Expand LVM"
-    echo "4. Domain Join"
-    echo "5. Install LAPS4LINUX Runner"
-    echo "6. Install & Configure Certbot for Cloudflare DNS challenges"
-    echo "7. Install Pelican Wings"
-    echo "8. Run Ubuntu Updates"
+    echo "1. Set Static DNS to DCs"
+    echo "2. Expand LVM"
+    echo "3. Domain Join"
+    echo "4. Install LAPS4LINUX Runner (Make sure computer object in proper OU First!)"
+    echo "============================"
+    echo "5. Install & Configure Certbot for Cloudflare DNS challenges"
+    echo "6. Install Pelican Wings"
+    echo "7. Run Ubuntu Updates"
     echo "0. Exit"
     echo "============================"
     read -p "Enter your choice: " choice
@@ -74,22 +76,22 @@ while true; do
         1)
             set_static_dns
             ;;
-        3)
+        2)
             expand_lvm
             ;;
-        4)
+        3)
             domain_join
             ;;
-        5)
+        4)
             install_laps4linux_runner
             ;;
-        6)
+        5)
             install_certbot_cloudflare
             ;;
-        7)
+        6)
             install_pelican_wings
             ;;
-        8)
+        7)
             run_ubuntu_updates
             ;;
         0)
